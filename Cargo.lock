@@ -1516,6 +1516,15 @@ name = "icu_locid_transform_data"
 version = "1.4.0"
 
 [[package]]
+name = "icu_messageformat"
+version = "1.4.0"
+dependencies = [
+ "log",
+ "nom",
+ "zerovec",
+]
+
+[[package]]
 name = "icu_normalizer"
 version = "1.4.1"
 dependencies = [
