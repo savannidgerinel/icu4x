@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned, string::String, vec, vec::Vec};
+use alloc::{borrow::ToOwned, string::String, vec, vec::Vec, collections::BTreeMap};
 use nom::{
     branch::alt, bytes::complete::{tag, take_till, take_until}, character::complete::char, combinator::eof, multi::many0, sequence::delimited, Finish, IResult, Parser
 };
@@ -39,12 +39,27 @@ pub struct Message {
     parts: Vec<MessagePart>,
 }
 
+type Values<'a> = BTreeMap<&'a str, Value>;
+
+#[derive(Debug)]
+pub enum Value {
+    String(String),
+}
+
+impl Value {
+    fn render(&self) -> String {
+        match self {
+            Value::String(s) => s.clone(),
+        }
+    }
+}
+
 impl Message {
-    pub fn render(&self) -> String {
+    pub fn render(&self, values: Values) -> String {
         self.parts
             .as_slice()
             .iter()
-            .map(|part| part.render())
+            .map(|part| part.render(&values))
             .collect::<String>()
     }
 }
@@ -90,12 +105,15 @@ enum MessagePart {
 }
 
 impl MessagePart {
-    fn render(&self) -> String {
-        use MessagePart::*;
-
+    fn render(&self, values: &Values) -> String {
         match self {
-            MessageText(text) => text.clone(),
-            Argument(_) => unimplemented!(),
+            MessagePart::MessageText(text) => text.clone(),
+            MessagePart::Argument(Argument::NoneArg(name)) => {
+                let arg_name: &str = name.as_ref();
+                values.get(arg_name).map(|v| v.render()).unwrap_or("".to_owned())
+            }
+            MessagePart::Argument(Argument::SimpleArg) => unimplemented!(),
+            MessagePart::Argument(Argument::ComplexArg(_)) => unimplemented!(),
         }
     }
 }
@@ -171,19 +189,24 @@ mod tests {
     fn it_parses_a_simple_message() {
         let message =
             Message::try_from("Welcome to ICU4X MessageFormat").expect("message to parse");
-        assert_eq!(message.render(), "Welcome to ICU4X MessageFormat");
+        assert_eq!(message.render(BTreeMap::new()), "Welcome to ICU4X MessageFormat");
     }
 
     #[test]
     fn it_parses_messages_with_basic_placeholders() {
-        let message = Message::try_from("At {1} on {1}, there was {2} on planet {0}.")
+        let message = Message::try_from("At {1} on {2}, there was {3} on planet {0}.")
             .expect("message to parse");
 
         println!("{:?}", message);
 
+        let mut values = BTreeMap::new();
+        values.insert("0", Value::String("Mars".to_owned()));
+        values.insert("1", Value::String("11:05".to_owned()));
+        values.insert("2", Value::String("June 5th".to_owned()));
+        values.insert("3", Value::String("a great celebration".to_owned()));
         assert_eq!(
-            message.render(),
-            "At 11:05 on June 5th, there was a great celebration on planet Mars"
+            message.render(values),
+            "At 11:05 on June 5th, there was a great celebration on planet Mars."
         );
     }
 }
